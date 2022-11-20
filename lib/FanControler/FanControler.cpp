@@ -36,6 +36,7 @@ void FanControler::handleFanControler() {
         // handle overflow
         initFanController();
         lastMs = currentMillis;
+        Serial.println("timer overflow");
         return;
     }
     handleHumidityFanControl(currentMillis);
@@ -45,8 +46,7 @@ void FanControler::handleFanControler() {
 
 void FanControler::handleFanButtonEvent(unsigned long currentMillis) {
     if (nextFanOffTimeout != 0 && currentMillis > nextFanOffTimeout) {
-        lastFanState = FAN_OFF;
-        updateFanAndStartTimer(lastFanState, FAN_DURATION_MS);
+        updateFanAndStartTimer(FAN_OFF, FAN_DURATION_MS);
         return;
     }
 
@@ -56,17 +56,14 @@ void FanControler::handleFanButtonEvent(unsigned long currentMillis) {
         case NONE:
             break;
         case FAN_BUTTON_SHORT:
-            lastFanState = FAN_OFF;
-            updateFanAndStartTimer(lastFanState, 0);
+            updateFanAndStartTimer(FAN_OFF, 0);
             break;
         case FAN_BUTTON:
-            lastFanState = rotateFanState(lastFanState);
-            updateFanAndStartTimer(lastFanState, FAN_DURATION_MS);
+            updateFanAndStartTimer(rotateFanState(), FAN_DURATION_MS);
             break;
         case FAN_BUTTON_LONG:
             if (lastFanState == FAN_OFF) {
-                lastFanState = rotateFanState(lastFanState);
-                updateFanAndStartTimer(lastFanState, FAN_DURATION_MS);
+                updateFanAndStartTimer(rotateFanState(), FAN_DURATION_MS);
             } else {
                 increaseTimer();
             }
@@ -75,12 +72,10 @@ void FanControler::handleFanButtonEvent(unsigned long currentMillis) {
             fanHumidityAutoMode = !fanHumidityAutoMode;
             if (fanHumidityAutoMode) {
                 // feedback DHT auto on: fan fast for 5 s
-                lastFanState = FAN_S2;
-                updateFanAndStartTimer(lastFanState, 5000);
+                 updateFanAndStartTimer(FAN_S2, 5000);
             } else {
                 // feedback DHT auto off: fan slow for 1 s
-                lastFanState = FAN_S1;
-                updateFanAndStartTimer(lastFanState, 1000);
+                updateFanAndStartTimer(FAN_S1, 1000);
             }
             break;
     }
@@ -131,7 +126,7 @@ void stopTimer() {
 
 void startTimer(unsigned long duration) {
     unsigned long currentMillis = millis();
-    nextFanOffTimeout = currentMillis + duration;
+    nextFanOffTimeout = duration == 0 ? 0 : currentMillis + duration;
 }
 
 void FanControler::increaseTimer() {
@@ -142,13 +137,13 @@ void FanControler::increaseTimer() {
     }
 }
 
-FanState FanControler::rotateFanState(FanState fanState) {
-    switch (fanState) {
+FanState FanControler::rotateFanState() {
+    switch (lastFanState) {
         case FAN_OFF:
-            return FAN_S1;
-        case FAN_S1:
             return FAN_S2;
         case FAN_S2:
+            return FAN_S1;
+        case FAN_S1:
             return FAN_OFF;
     }
     return FAN_OFF;
@@ -172,9 +167,17 @@ void FanControler::updateFanAndStartTimer(FanState state, unsigned long duration
             startTimer(duration);
             break;
     }
+    lastFanState = state;
 }
 
 void FanControler::handleHumidityFanControl(unsigned long currentMillis) {
+
+    if (lastFanState != FAN_OFF) {
+        nextHumidityMeasurement = 0;
+        humidityHighCounter = 0;
+        return;
+    }
+
     if (!fanHumidityAutoMode || currentMillis < nextHumidityMeasurement) {
         return;
     }
@@ -198,14 +201,10 @@ void FanControler::handleHumidityFanControl(unsigned long currentMillis) {
     Serial.print((int) humidity);
     Serial.println("% H");
 
-
-    if (lastFanState != FAN_OFF) {
-        return;
-    }
-
     if (humidity > HUMIDITY_XHIGH) {
         // shower on detected
         lastFanState = FAN_S2;
+        humidityHighCounter = 0;
         updateFanAndStartTimer(lastFanState, FAN_DURATION_SHOWER_MS);
         Serial.println("Shower detected");
         return;
@@ -217,14 +216,13 @@ void FanControler::handleHumidityFanControl(unsigned long currentMillis) {
     }
 
     if (humidity > HUMIDITY_HIGH) {
-        if (humidityHighCounter < 4) {
+        if (humidityHighCounter < 6) {
             humidityHighCounter++;
             return;
         }
 
-        lastFanState = FAN_S1;
         // start short auto ventialion
-        updateFanAndStartTimer(lastFanState, HUMIDITY_SHORT_AUTO_MS);
+        updateFanAndStartTimer(FAN_S2, HUMIDITY_SHORT_AUTO_MS);
         // short auto ventilation paused for 10 min
         humidityAutoPauseUntil = currentMillis + HUMIDITY_AUTO_PAUSE_MS + HUMIDITY_SHORT_AUTO_MS;
         humidityHighCounter = 0;

@@ -27,12 +27,12 @@ const int FAN_BUTTON_XLONG_MS = 5000; // switch fan auto (DHT) mode on or off
 const unsigned long HUMIDITY_CHECK_INTERVALL = 10000;
 //
 const unsigned long HUMIDITY_AUTO_PAUSE_MS = 600000;
-const unsigned long HUMIDITY_SHORT_AUTO_MS = 60000;
+const unsigned long HUMIDITY_SHORT_AUTO_MS = 120000;
 const unsigned long FAN_DURATION_MS = 300000;
 const unsigned long FAN_DURATION_SHOWER_MS = 300000;
 
-const byte HUMIDITY_XHIGH = 90;
-const byte HUMIDITY_HIGH = 73;
+const byte HUMIDITY_XHIGH = 93;
+const byte HUMIDITY_HIGH = 86;
 const byte TEMP_SHOWER_ON = 22;
 
 // for DHT11,
@@ -60,7 +60,7 @@ public:
 
     void handleFanButtonEvent(unsigned long millis);
 
-    FanState rotateFanState(FanState state);
+    FanState rotateFanState();
 
     void updateFanAndStartTimer(FanState state, unsigned long duration);
 
